@@ -4,11 +4,30 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { chat_id, message, type, file_url } = body;
+    const { chat_id, message, file_url } = body;
 
     if (!chat_id || (!message && !file_url)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
+
+    // Ensure the chat exists (Auto-create if n8n or agent responds to a new ID)
+    const { data: chat } = await supabaseAdmin
+      .from('chats')
+      .select('id')
+      .eq('id', chat_id)
+      .single();
+
+    if (!chat) {
+      await supabaseAdmin.from('chats').insert({
+        id: chat_id,
+        client_id: 'auto_generated',
+        user_name: 'Cliente Nuevo',
+        agent_active: false // If we respond manually, we assume the bot is off
+      });
+    }
+
+    // Determine type automatically
+    const msgType = file_url ? 'file' : 'text';
 
     // Insert the agent message into Supabase
     const { data: newMessage, error: msgError } = await supabaseAdmin
@@ -16,7 +35,7 @@ export async function POST(request: Request) {
       .insert({
         chat_id,
         sender: 'agent',
-        type: type || 'text',
+        type: msgType,
         message,
         file_url: file_url || null
       })
