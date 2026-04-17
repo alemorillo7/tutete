@@ -247,14 +247,32 @@
 
       
     @media (max-width: 480px) {
-      #tutete-chat-window {
-        width: 100%;
-        height: 100vh;
+      #tutete-chatbot-container {
         bottom: 0;
         right: 0;
+      }
+      #tutete-chat-toggle {
+        bottom: 20px;
+        right: 20px;
+        position: fixed;
+      }
+      #tutete-chat-window {
+        width: 100% !important;
+        height: 100% !important;
+        height: -webkit-fill-available !important; /* Fix for mobile browser bars */
+        bottom: 0 !important;
+        right: 0 !important;
         border-radius: 0;
+        position: fixed;
+      }
+      #tutete-chat-header {
+        padding: 20px 16px; /* Header más grande en móvil */
+      }
+      .chat-btn {
+        padding: 10px; /* Botones más fáciles de tocar */
       }
     }
+
   `;
 
   // Inject Styles

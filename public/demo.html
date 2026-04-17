@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,16 +18,25 @@
             height: 100vh;
             color: #333;
         }
+
         .container {
             text-align: center;
             background: white;
             padding: 2rem;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
             max-width: 500px;
         }
-        h1 { color: #de93a3; }
-        p { color: #666; margin-bottom: 2rem; }
+
+        h1 {
+            color: #de93a3;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
         .badge {
             background: #de93a3;
             color: white;
@@ -37,27 +47,31 @@
         }
     </style>
 </head>
+
 <body>
 
     <div class="container">
         <span class="badge">Ecommerce Demo</span>
         <h1>Bienvenido a Tutete</h1>
-        <p>Esta es una página de prueba para verificar el funcionamiento del Chatbot. Deberías ver el botón rosa abajo a la derecha.</p>
-        <button onclick="alert('Producto añadido!')" style="background: #de93a3; border: none; color: white; padding: 10px 20px; border-radius: 10px; cursor: pointer;">
+        <p>Esta es una página de prueba para verificar el funcionamiento del Chatbot. Deberías ver el botón rosa abajo a
+            la derecha.</p>
+        <button onclick="alert('Producto añadido!')"
+            style="background: #de93a3; border: none; color: white; padding: 10px 20px; border-radius: 10px; cursor: pointer;">
             Añadir al carrito
         </button>
     </div>
 
     <!-- CONFIGURACIÓN DEL CHATBOT -->
     <script>
-      window.CHATBOT_CONFIG = {
-        client_id: "cliente_prueba_joel",
-        api_base_url: "http://localhost:3000" // Asegúrate de que tu servidor esté corriendo aquí
-      };
+        window.CHATBOT_CONFIG = {
+            client_id: "cliente_prueba_joel",
+            api_base_url: "https://tutete.vercel.app" // Asegúrate de que tu servidor esté corriendo aquí
+        };
     </script>
-    
+
     <!-- CARGA EL SCRIPT DEL CHATBOT -->
     <script src="/chatbot.js"></script>
 
 </body>
+
 </html>
