@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { chat_id, message, type, file_url } = body;
 
-    if (!chat_id || !message) {
+    if (!chat_id || (!message && !file_url)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 

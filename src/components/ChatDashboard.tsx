@@ -217,10 +217,36 @@ export default function ChatDashboard() {
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map((msg, idx) => {
                 const isAgent = msg.sender === 'agent';
+                const isFile = msg.type === 'file' && msg.file_url;
+                const isImage = isFile && msg.file_url.match(/\.(jpg|jpeg|png|gif|webp)/i);
+                const isAudio = isFile && msg.file_url.match(/\.(mp3|wav|ogg|m4a|weba)/i);
+
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'}`}>
                     <div className={`max-w-md px-4 py-2.5 rounded-2xl shadow-sm text-sm ${isAgent ? 'bg-[#de93a3] text-white rounded-br-sm' : 'bg-gray-800 border border-gray-700 text-gray-100 rounded-bl-sm'}`}>
-                      {msg.message}
+                      {msg.message && <div className={isFile ? 'mb-2' : ''}>{msg.message}</div>}
+                      
+                      {isImage && (
+                        <img 
+                          src={msg.file_url} 
+                          alt="Attachment" 
+                          className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity" 
+                          onClick={() => window.open(msg.file_url, '_blank')}
+                        />
+                      )}
+
+                      {isAudio && (
+                        <audio controls className="w-full h-8 mt-1">
+                          <source src={msg.file_url} />
+                          Your browser does not support the audio element.
+                        </audio>
+                      )}
+
+                      {isFile && !isImage && !isAudio && (
+                        <a href={msg.file_url} target="_blank" className="flex items-center gap-2 underline text-white/90">
+                          <MessageSquare size={14} /> Ver archivo adjunto
+                        </a>
+                      )}
                     </div>
                     <span className="text-[10px] text-gray-400 mt-1 mx-1">
                       {format(new Date(msg.created_at), 'HH:mm')}
@@ -233,7 +259,51 @@ export default function ChatDashboard() {
 
             {/* Input Area */}
             <div className="p-4 bg-gray-800 border-t border-gray-700">
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <input 
+                   type="file" 
+                   id="admin-file-input" 
+                   className="hidden" 
+                   onChange={async (e) => {
+                     const file = e.target.files?.[0];
+                     if (!file || !activeChatId) return;
+                     
+                     const filePath = `chat-files/${activeChatId}/${crypto.randomUUID()}_${file.name}`;
+                     const { data, error } = await supabase.storage
+                       .from('chat-files')
+                       .upload(filePath, file);
+
+                     if (error) {
+                       alert('Error al subir: ' + error.message);
+                       return;
+                     }
+
+                     const { data: { publicUrl } } = supabase.storage
+                       .from('chat-files')
+                       .getPublicUrl(filePath);
+
+                     await fetch('/api/send-message', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ 
+                         chat_id: activeChatId, 
+                         message: '', 
+                         type: 'file', 
+                         file_url: publicUrl 
+                       })
+                     });
+                   }}
+                />
+                
+                <button 
+                  onClick={() => document.getElementById('admin-file-input')?.click()}
+                  disabled={activeChat?.agent_active}
+                  className="p-2 text-gray-400 hover:text-[#de93a3] transition-colors disabled:opacity-30"
+                  title="Adjuntar imagen/archivo"
+                >
+                  <Search size={20} /> {/* Usando Search como icono de adjunto temporal o similar */}
+                </button>
+
                 <input 
                   type="text" 
                   value={inputText}
@@ -243,6 +313,7 @@ export default function ChatDashboard() {
                   disabled={activeChat?.agent_active}
                   className="flex-1 bg-gray-900 border border-gray-700 text-gray-100 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#de93a3] focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500"
                 />
+                
                 <button 
                   onClick={sendMessage}
                   disabled={!inputText.trim() || activeChat?.agent_active}
