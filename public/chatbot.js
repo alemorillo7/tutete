@@ -296,13 +296,20 @@
 
   // State
   let chatData = {
-    chat_id: localStorage.getItem('tutete_chat_id'),
-    user_name: localStorage.getItem('tutete_user_name') || 'Cliente'
+    chat_id: config.user_id || localStorage.getItem('tutete_chat_id'),
+    user_name: config.user_name || localStorage.getItem('tutete_user_name') || 'Cliente'
   };
 
   if (!chatData.chat_id) {
     chatData.chat_id = generateUUID();
     localStorage.setItem('tutete_chat_id', chatData.chat_id);
+  } else if (config.user_id) {
+    // If coming from config, sync to localstorage too
+    localStorage.setItem('tutete_chat_id', chatData.chat_id);
+  }
+  
+  if (config.user_name) {
+    localStorage.setItem('tutete_user_name', chatData.user_name);
   }
 
   let isOpen = false;
