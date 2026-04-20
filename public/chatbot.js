@@ -1,13 +1,16 @@
 (function() {
   // Styles for the Tutete Chatbot
   const styles = `
+    /* Import Lato font */
+    @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
+
     :root {
-      --chat-primary: #e691a3; /* Tutete Pink */
-      --chat-primary-hover: #cf798b;
+      --chat-primary: #E59EAF; /* Tutete Pink */
+      --chat-primary-hover: #D4899A;
       --chat-bg: #fff;
       --chat-text: #333;
       --chat-border: #ddd;
-      --chat-msg-user: #e691a3;
+      --chat-msg-user: #E59EAF;
       --chat-msg-agent: #f0f0f0;
       --chat-shadow: 0 4px 12px rgba(0,0,0,0.15);
       --chat-radius: 12px;
@@ -18,7 +21,7 @@
       bottom: 20px;
       right: 20px;
       z-index: 999999;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Lato', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     #tutete-chat-toggle {
