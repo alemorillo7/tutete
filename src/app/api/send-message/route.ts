@@ -29,6 +29,9 @@ export async function POST(request: Request) {
     // Determine type automatically
     const msgType = file_url ? 'file' : 'text';
 
+    // Clean potential bad characters from AI response
+    const cleanMessage = message ? message.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g, "") : message;
+
     // Insert the agent message into Supabase
     const { data: newMessage, error: msgError } = await supabaseAdmin
       .from('messages')
@@ -36,17 +39,23 @@ export async function POST(request: Request) {
         chat_id,
         sender: 'agent',
         type: msgType,
-        message,
+        message: cleanMessage,
         file_url: file_url || null
       })
       .select()
       .single();
 
-    if (msgError) throw msgError;
+    if (msgError) {
+      console.error('Supabase Insert Error:', msgError);
+      return NextResponse.json({ error: msgError.message }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true, message: newMessage });
   } catch (error: any) {
-    console.error('Error sending agent message:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.error('CRITICAL BACKEND ERROR:', error);
+    return NextResponse.json({ 
+      error: error.message || 'Internal Server Error',
+      details: error.toString()
+    }, { status: 500 });
   }
 }
