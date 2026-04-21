@@ -371,15 +371,27 @@
   const micBtn = document.getElementById('tutete-chat-mic');
   const recordingStatus = document.getElementById('tutete-recording-status');
 
-  // Event Push
+  // Event Push (Strict formatting based on GTM requirements)
   function pushEvent(eventName, payload = {}) {
-    console.log('[GA4 Event]', eventName, payload); // For easy debugging
+    console.log('[GA4 Event]', eventName, payload);
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({ event: eventName, ...payload });
+    
+    // Clear previous sticky variables as requested
+    window.dataLayer.push({ 
+      event: eventName, 
+      product_id: undefined, 
+      product_name: undefined, 
+      value: undefined, 
+      query_text: undefined,
+      reason: undefined,
+      message_count: undefined,
+      ...payload 
+    });
   }
 
-  // To track handoff
+  // State for tracking
   let botWasActiveLastCheck = true;
+  let userMessageCount = 0;
 
   // Render Messages
   function renderMessages() {
@@ -414,9 +426,21 @@
   messagesEl.addEventListener('click', (e) => {
     const link = e.target.closest('a');
     if (link) {
-      pushEvent('product_clicked', { url: link.href });
-      if (link.href.includes('/cart') || link.href.includes('/carrito') || link.href.includes('checkout')) {
-        pushEvent('chat_to_cart');
+      // Intentar extraer data-attributes si el bot los envía
+      const productId = link.getAttribute('data-product-id');
+      const productName = link.getAttribute('data-product-name');
+      const val = link.getAttribute('data-value');
+
+      if (link.href.includes('/cart') || link.href.includes('/carrito') || link.href.includes('checkout') || link.getAttribute('data-action') === 'add_to_cart') {
+        pushEvent('chat_to_cart', { 
+           product_id: productId || 'unknown', 
+           value: val ? parseFloat(val) : 0 
+        });
+      } else {
+        pushEvent('product_clicked', { 
+           product_id: productId || 'unknown', 
+           product_name: productName || link.innerText.trim() 
+        });
       }
     }
   });
@@ -428,15 +452,27 @@
       if (res.ok) {
         const data = await res.json();
         
-        // Check for agent status changes to trigger GA4 human_handoff
-        // This is a simple heuristic: if a message from 'agent' appears and we don't know the bot state
-        // or if we receive a metadata flag from server (optional)
-        const hasAgentMsg = data.messages && data.messages.some(m => m.sender === 'agent');
+        // Handoff tracking
+        if (data.agent_active !== undefined) {
+           if (botWasActiveLastCheck && data.agent_active === false) {
+             pushEvent('human_handoff', { reason: 'bot_disabled_by_agent' });
+             botWasActiveLastCheck = false;
+           } else if (!botWasActiveLastCheck && data.agent_active === true) {
+             botWasActiveLastCheck = true;
+           }
+        }
         
-        // Analytics: if a specific message contains an event trigger
+        // Analytics parsing from AI messages (using HTML comments like <!-- GA4: product_recommended | SKU-123 | Saco... -->)
         data.messages?.forEach(msg => {
-          if (msg.analytics_event && !messages.find(m => m.id === msg.id)) {
-             pushEvent(msg.analytics_event);
+          if (msg.sender === 'agent' && msg.message.includes('<!-- GA4:')) {
+             const trackMatch = msg.message.match(/<!-- GA4:\s*([a-zA-Z_]+)\s*\|\s*([^|]+)\s*\|\s*([^>]+)-->/);
+             if (trackMatch && !messages.find(m => m.id === msg.id)) {
+                if (trackMatch[1] === 'product_recommended') {
+                  pushEvent('product_recommended', { product_id: trackMatch[2].trim(), product_name: trackMatch[3].trim() });
+                } else if (trackMatch[1] === 'chat_fallback') {
+                  pushEvent('chat_fallback', { query_text: trackMatch[2].trim() });
+                }
+             }
           }
         });
 
@@ -475,7 +511,9 @@
     const uiMsg = { ...newMsg, created_at: newMsg.timestamp, sender: 'user' };
     messages.push(uiMsg);
     renderMessages();
-    pushEvent('chat_message_sent');
+    
+    userMessageCount++;
+    pushEvent('chat_message_sent', { message_count: userMessageCount });
 
     try {
       await fetch(`${config.api_base_url}/api/ingest-message`, {

@@ -16,9 +16,18 @@ export async function GET(request: Request) {
       .eq('chat_id', chat_id)
       .order('created_at', { ascending: true });
 
+    const { data: chatData, error: chatError } = await supabaseAdmin
+      .from('chats')
+      .select('agent_active')
+      .eq('id', chat_id)
+      .single();
+
     if (error) throw error;
 
-    return NextResponse.json({ messages: data });
+    return NextResponse.json({ 
+      messages: data,
+      agent_active: chatData?.agent_active 
+    });
   } catch (error: any) {
     console.error('Error fetching messages:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
