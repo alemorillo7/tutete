@@ -4,14 +4,15 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { chat_id, agent_active } = body;
+    const { chat_id } = body;
 
-    if (!chat_id || typeof agent_active !== 'boolean') {
-      return NextResponse.json({ error: 'Missing or invalid parameters' }, { status: 400 });
+    if (!chat_id) {
+      return NextResponse.json({ error: 'Falta el parámetro chat_id' }, { status: 400 });
     }
 
-    let updatePayload: any = { agent_active };
+    let updatePayload: any = { agent_active: false };
 
+    // Get current chat tags
     const { data: currentChat, error: fetchError } = await supabaseAdmin
       .from('chats')
       .select('tags')
@@ -19,14 +20,16 @@ export async function POST(request: Request) {
       .single();
 
     if (fetchError && fetchError.code === '42703') {
-      // Si la columna tags no existe, actualizamos solo agent_active (fallback)
-      console.warn("Columna 'tags' no existe en la BD. Actualizando solo agent_active.");
+       // Columna tags no existe
+       console.warn("Columna 'tags' no existe en Supabase. Actualizando solo agent_active.");
     } else if (fetchError) {
-      throw fetchError;
+       throw fetchError;
     } else {
       let currentTags = currentChat.tags || [];
+      // Remove bot status tags
       currentTags = currentTags.filter((t: string) => t !== 'agent-on' && t !== 'agent-off');
-      currentTags.push(agent_active ? 'agent-on' : 'agent-off');
+      // Add Bot Off tag
+      currentTags.push('agent-off');
       updatePayload.tags = currentTags;
     }
 
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, chat: data });
   } catch (error: any) {
-    console.error('Error toggling agent:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.error('Error disabling agent:', error);
+    return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 });
   }
 }

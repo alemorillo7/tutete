@@ -31,10 +31,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF0F3] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#FDF5F7] flex items-center justify-center p-4 font-sans">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#de93a3] mb-2">Tutete Chat</h1>
+          <h1 className="text-3xl font-bold text-[#E59EAF] mb-2">Tutete Chat</h1>
           <p className="text-gray-500">Panel de Administración</p>
         </div>
 
@@ -54,7 +54,7 @@ export default function LoginPage() {
               <input
                 type="email"
                 required
-                className="pl-10 w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#de93a3] focus:border-transparent transition-all"
+                className="pl-10 w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#E59EAF] focus:border-transparent transition-all placeholder-gray-400"
                 placeholder="agente@tutete.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -71,7 +71,7 @@ export default function LoginPage() {
               <input
                 type="password"
                 required
-                className="pl-10 w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#de93a3] focus:border-transparent transition-all"
+                className="pl-10 w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#E59EAF] focus:border-transparent transition-all placeholder-gray-400"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -82,7 +82,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#de93a3] hover:bg-[#cc7889] text-white font-semibold py-3 rounded-lg transition-colors flex justify-center items-center"
+            className="w-full bg-[#E59EAF] hover:bg-[#D4899A] text-white font-semibold py-3 rounded-lg transition-colors flex justify-center items-center shadow-md"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

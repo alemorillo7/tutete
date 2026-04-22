@@ -4,17 +4,35 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   LogOut, Bot, User, Send, Search, MessageSquare, 
-  BotOff, Paperclip, Tag, ChevronDown, Check, Info
+  BotOff, Paperclip, Tag, ChevronDown, Check, Info,
+  Settings, Plus, Edit2, Trash2, X
 } from "lucide-react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 
-const AVAILABLE_TAGS = [
+const DEFAULT_TAGS = [
   { id: 'ventas', label: 'Ventas', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   { id: 'soporte', label: 'Soporte', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   { id: 'queja', label: 'Queja', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   { id: 'duda', label: 'Duda', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  { id: 'vip', label: 'VIP', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { id: 'vip', label: 'VIP', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
+];
+
+const SYSTEM_TAGS = [
+  { id: 'agent-on', label: 'Bot Activo', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { id: 'agent-off', label: 'Bot Apagado', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
+];
+
+const COLOR_OPTIONS = [
+  { name: 'Azul', value: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { name: 'Púrpura', value: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { name: 'Rojo', value: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  { name: 'Amarillo', value: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  { name: 'Ámbar', value: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { name: 'Verde', value: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  { name: 'Rosa', value: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
+  { name: 'Cian', value: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  { name: 'Gris', value: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
 ];
 
 export default function ChatDashboard() {
@@ -23,10 +41,29 @@ export default function ChatDashboard() {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
   const [showTagMenu, setShowTagMenu] = useState(false);
+  const [userTags, setUserTags] = useState(DEFAULT_TAGS);
+  const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<{id: string, label: string, color: string} | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const activeChat = chats.find(c => c.id === activeChatId);
+  const AVAILABLE_TAGS = [...userTags, ...SYSTEM_TAGS];
+
+  // Load custom tags
+  useEffect(() => {
+    const savedTags = localStorage.getItem('tutete_custom_tags');
+    if (savedTags) {
+      try {
+        setUserTags(JSON.parse(savedTags));
+      } catch (e) {}
+    }
+  }, []);
+
+  const saveUserTags = (tags: any[]) => {
+    setUserTags(tags);
+    localStorage.setItem('tutete_custom_tags', JSON.stringify(tags));
+  };
 
   // Fetch initial chats
   useEffect(() => {
@@ -100,11 +137,19 @@ export default function ChatDashboard() {
   };
 
   const toggleAgent = async () => {
-    if (!activeChatId) return;
-    const newState = !activeChat?.agent_active;
+    if (!activeChatId || !activeChat) return;
+    const newState = !activeChat.agent_active;
     
     // Optimistic update
-    setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, agent_active: newState } : c));
+    setChats(prev => prev.map(c => {
+      if (c.id === activeChatId) {
+        let currentTags = c.tags || [];
+        currentTags = currentTags.filter((t: string) => t !== 'agent-on' && t !== 'agent-off');
+        currentTags.push(newState ? 'agent-on' : 'agent-off');
+        return { ...c, agent_active: newState, tags: currentTags };
+      }
+      return c;
+    }));
     
     await fetch('/api/toggle-agent', {
       method: 'POST',
@@ -172,7 +217,7 @@ export default function ChatDashboard() {
       
       {/* Sidebar - App Navigation */}
       <div className="w-16 bg-[#181a20] border-r border-white/5 flex flex-col items-center py-5 gap-8 z-20 shadow-xl">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#de93a3] to-[#c77a8a] rounded-xl flex items-center justify-center text-white font-bold shadow-lg shrink-0 transition-transform hover:scale-105 cursor-pointer">
+        <div className="w-10 h-10 bg-gradient-to-br from-[#E59EAF] to-[#D4899A] rounded-xl flex items-center justify-center text-white font-bold shadow-lg shrink-0 transition-transform hover:scale-105 cursor-pointer">
           T
         </div>
         
@@ -191,7 +236,7 @@ export default function ChatDashboard() {
       <div className="w-80 bg-[#181a20] border-r border-white/5 flex flex-col z-10">
         <div className="p-5 border-b border-white/5 bg-[#1e2128]">
           <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
-            <MessageSquare size={18} className="text-[#de93a3]" />
+            <MessageSquare size={18} className="text-[#E59EAF]" />
             Conversaciones
           </h2>
           <div className="mt-4 relative">
@@ -199,7 +244,7 @@ export default function ChatDashboard() {
             <input 
               type="text" 
               placeholder="Buscar chat..." 
-              className="w-full bg-[#0f1115] border border-white/10 text-white placeholder-gray-500 rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#de93a3] transition-shadow"
+              className="w-full bg-[#0f1115] border border-white/10 text-white placeholder-gray-500 rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#E59EAF] transition-shadow"
             />
           </div>
         </div>
@@ -212,7 +257,7 @@ export default function ChatDashboard() {
               <div 
                 key={chat.id} 
                 onClick={() => setActiveChatId(chat.id)}
-                className={`p-4 border-b border-white/5 cursor-pointer transition-all hover:bg-white/5 relative overflow-hidden ${activeChatId === chat.id ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-[#de93a3]' : ''}`}
+                className={`p-4 border-b border-white/5 cursor-pointer transition-all hover:bg-white/5 relative overflow-hidden ${activeChatId === chat.id ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-[#E59EAF]' : ''}`}
               >
                 <div className="flex justify-between items-start mb-1">
                   <div className="font-medium text-gray-100 flex items-center gap-2 truncate">
@@ -292,25 +337,37 @@ export default function ChatDashboard() {
                      <>
                        <div className="fixed inset-0 z-40" onClick={() => setShowTagMenu(false)}></div>
                        <div className="absolute right-0 mt-2 w-48 bg-[#1e2128] border border-white/10 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2">
-                         <div className="px-3 pb-2 mb-2 border-b border-white/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                           Asignar Etiquetas
+                         <div className="px-3 pb-2 mb-2 border-b border-white/5 flex items-center justify-between">
+                           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Etiquetas</span>
+                           <button 
+                             onClick={() => {
+                               setShowTagMenu(false);
+                               setIsManageTagsOpen(true);
+                             }}
+                             className="text-gray-400 hover:text-white transition-colors"
+                             title="Administrar Etiquetas"
+                           >
+                             <Settings size={14} />
+                           </button>
                          </div>
-                         {AVAILABLE_TAGS.map(tag => {
-                           const isSelected = (activeChat?.tags || []).includes(tag.id);
-                           return (
-                             <button
-                               key={tag.id}
-                               onClick={() => toggleTag(tag.id)}
-                               className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-white/5 transition-colors text-sm text-gray-200"
-                             >
-                               <div className="flex items-center gap-2">
-                                 <span className={`w-2 h-2 rounded-full ${tag.color.split(' ')[0]}`}></span>
-                                 {tag.label}
-                               </div>
-                               {isSelected && <Check size={14} className="text-emerald-400" />}
-                             </button>
-                           );
-                         })}
+                         <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                           {AVAILABLE_TAGS.map(tag => {
+                             const isSelected = (activeChat?.tags || []).includes(tag.id);
+                             return (
+                               <button
+                                 key={tag.id}
+                                 onClick={() => toggleTag(tag.id)}
+                                 className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-white/5 transition-colors text-sm text-gray-200"
+                               >
+                                 <div className="flex items-center gap-2">
+                                   <span className={`w-2 h-2 rounded-full ${tag.color.split(' ')[0]}`}></span>
+                                   {tag.label}
+                                 </div>
+                                 {isSelected && <Check size={14} className="text-emerald-400" />}
+                               </button>
+                             );
+                           })}
+                         </div>
                        </div>
                      </>
                    )}
@@ -341,7 +398,7 @@ export default function ChatDashboard() {
 
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} group`}>
-                    <div className={`max-w-[70%] px-4 py-3 rounded-2xl shadow-sm text-sm relative ${isAgent ? 'bg-gradient-to-br from-[#de93a3] to-[#c77a8a] text-white rounded-tr-sm' : 'bg-[#1e2128] border border-white/5 text-gray-200 rounded-tl-sm'}`}>
+                    <div className={`max-w-[70%] px-4 py-3 rounded-2xl shadow-sm text-sm relative ${isAgent ? 'bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white rounded-tr-sm' : 'bg-[#1e2128] border border-white/5 text-gray-200 rounded-tl-sm'}`}>
                       {msg.message && <div className={`${isFile ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>}
                       
                       {isImage && (
@@ -379,7 +436,7 @@ export default function ChatDashboard() {
 
             {/* Input Area */}
             <div className="p-4 bg-[#181a20] border-t border-white/5 z-10">
-              <div className="flex items-end gap-2 bg-[#0f1115] border border-white/10 rounded-2xl p-1.5 focus-within:border-[#de93a3]/50 focus-within:ring-1 focus-within:ring-[#de93a3]/50 transition-all">
+              <div className="flex items-end gap-2 bg-[#0f1115] border border-white/10 rounded-2xl p-1.5 focus-within:border-[#E59EAF]/50 focus-within:ring-1 focus-within:ring-[#E59EAF]/50 transition-all">
                 
                 <input 
                    type="file" 
@@ -419,7 +476,7 @@ export default function ChatDashboard() {
                 <button 
                   onClick={() => document.getElementById('admin-file-input')?.click()}
                   disabled={activeChat?.agent_active}
-                  className="p-3 text-gray-400 hover:text-[#de93a3] hover:bg-[#de93a3]/10 rounded-xl transition-colors disabled:opacity-30 mb-0.5"
+                  className="p-3 text-gray-400 hover:text-[#E59EAF] hover:bg-[#E59EAF]/10 rounded-xl transition-colors disabled:opacity-30 mb-0.5"
                   title="Adjuntar archivo"
                 >
                   <Paperclip size={20} />
@@ -444,7 +501,7 @@ export default function ChatDashboard() {
                 <button 
                   onClick={sendMessage}
                   disabled={!inputText.trim() || activeChat?.agent_active}
-                  className="w-11 h-11 bg-gradient-to-br from-[#de93a3] to-[#c77a8a] text-white rounded-xl flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md mb-0.5"
+                  className="w-11 h-11 bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white rounded-xl flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md mb-0.5"
                 >
                   <Send size={18} className="ml-1" />
                 </button>
@@ -486,6 +543,132 @@ export default function ChatDashboard() {
         }
         `
       }} />
+
+      {/* Manage Tags Modal */}
+      {isManageTagsOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#1e2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-[#181a20]">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Tag size={18} className="text-[#E59EAF]" />
+                Administrar Etiquetas
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsManageTagsOpen(false);
+                  setEditingTag(null);
+                }}
+                className="text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-1.5 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
+              {/* Form to Add/Edit Tag */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                <h4 className="text-sm font-medium text-gray-300 mb-3">
+                  {editingTag ? 'Editar Etiqueta' : 'Nueva Etiqueta'}
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <input 
+                      type="text" 
+                      placeholder="Nombre de la etiqueta" 
+                      value={editingTag ? editingTag.label : ''}
+                      onChange={(e) => setEditingTag(prev => prev ? { ...prev, label: e.target.value } : { id: crypto.randomUUID(), label: e.target.value, color: COLOR_OPTIONS[0].value })}
+                      className="w-full bg-[#0f1115] border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#E59EAF]"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_OPTIONS.map(color => (
+                      <button
+                        key={color.name}
+                        onClick={() => setEditingTag(prev => prev ? { ...prev, color: color.value } : { id: crypto.randomUUID(), label: '', color: color.value })}
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${color.value.split(' ')[0]} ${editingTag?.color === color.value ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`}
+                        title={color.name}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      disabled={!editingTag?.label.trim()}
+                      onClick={() => {
+                        if (!editingTag || !editingTag.label.trim()) return;
+                        
+                        let newTags;
+                        if (userTags.find(t => t.id === editingTag.id)) {
+                          // Update existing
+                          newTags = userTags.map(t => t.id === editingTag.id ? editingTag : t);
+                        } else {
+                          // Create new
+                          newTags = [...userTags, editingTag];
+                        }
+                        
+                        saveUserTags(newTags);
+                        setEditingTag(null);
+                      }}
+                      className="flex-1 bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      {editingTag && userTags.find(t => t.id === editingTag.id) ? (
+                        <><Check size={16} /> Guardar Cambios</>
+                      ) : (
+                        <><Plus size={16} /> Añadir Etiqueta</>
+                      )}
+                    </button>
+                    {editingTag && (
+                      <button
+                        onClick={() => setEditingTag(null)}
+                        className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* List of Custom Tags */}
+              <h4 className="text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider text-xs">Tus Etiquetas</h4>
+              <div className="space-y-2">
+                {userTags.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No has creado etiquetas personalizadas.</p>
+                ) : (
+                  userTags.map(tag => (
+                    <div key={tag.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                      <span className={`text-xs px-2 py-1 rounded border ${tag.color}`}>
+                        {tag.label}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={() => setEditingTag(tag)}
+                          className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-md transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (confirm(`¿Estás seguro de eliminar la etiqueta "${tag.label}"?`)) {
+                              saveUserTags(userTags.filter(t => t.id !== tag.id));
+                            }
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
