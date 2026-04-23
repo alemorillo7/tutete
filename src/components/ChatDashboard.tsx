@@ -5,9 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { 
   LogOut, Bot, User, Send, Search, MessageSquare, 
   BotOff, Paperclip, Tag, ChevronDown, Check, Info,
-  Settings, Plus, Edit2, Trash2, X
+  Settings, Plus, Edit2, Trash2, X, Sun, Moon, NotebookPen
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
+import { es } from "date-fns/locale";
 import { useRouter } from "next/navigation";
 
 const DEFAULT_TAGS = [
@@ -35,6 +36,13 @@ const COLOR_OPTIONS = [
   { name: 'Gris', value: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
 ];
 
+const CANNED_RESPONSES = [
+  { trigger: '/saludo', text: '¡Hola! ¿En qué puedo ayudarte hoy?' },
+  { trigger: '/despedida', text: '¡Gracias por comunicarte con nosotros! Que tengas un excelente día.' },
+  { trigger: '/demora', text: 'Disculpa la demora, estamos revisando tu caso.' },
+  { trigger: '/devolucion', text: 'Para procesar una devolución, necesitamos el número de pedido y fotos del producto.' },
+];
+
 export default function ChatDashboard() {
   const [chats, setChats] = useState<any[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -44,13 +52,18 @@ export default function ChatDashboard() {
   const [userTags, setUserTags] = useState(DEFAULT_TAGS);
   const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<{id: string, label: string, color: string} | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [chatFilter, setChatFilter] = useState<'all'|'bot'|'human'>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isInternalNote, setIsInternalNote] = useState(false);
+  const [showCannedResponses, setShowCannedResponses] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const AVAILABLE_TAGS = [...userTags, ...SYSTEM_TAGS];
 
-  // Load custom tags
+  // Load custom tags and theme
   useEffect(() => {
     const savedTags = localStorage.getItem('tutete_custom_tags');
     if (savedTags) {
@@ -58,7 +71,18 @@ export default function ChatDashboard() {
         setUserTags(JSON.parse(savedTags));
       } catch (e) {}
     }
+    
+    const savedTheme = localStorage.getItem('tutete_theme');
+    if (savedTheme === 'dark') {
+      setIsDarkMode(true);
+    }
   }, []);
+
+  const toggleTheme = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('tutete_theme', newMode ? 'dark' : 'light');
+  };
 
   const saveUserTags = (tags: any[]) => {
     setUserTags(tags);
@@ -74,10 +98,23 @@ export default function ChatDashboard() {
       .channel('public:chats')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, payload => {
         if (payload.eventType === 'INSERT') {
-          setChats(prev => [payload.new, ...prev]);
+          setChats(prev => [{ ...payload.new, lastActivity: new Date(payload.new.created_at).getTime() }, ...prev]);
         } else if (payload.eventType === 'UPDATE') {
-          setChats(prev => prev.map(c => c.id === payload.new.id ? payload.new : c));
+          setChats(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
         }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        // When a new message arrives, update the lastActivity of the corresponding chat
+        // and resort the chats array
+        setChats(prev => {
+          const updatedChats = prev.map(chat => {
+            if (chat.id === payload.new.chat_id) {
+              return { ...chat, lastActivity: new Date(payload.new.created_at).getTime() };
+            }
+            return chat;
+          });
+          return updatedChats.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
+        });
       })
       .subscribe();
 
@@ -114,12 +151,36 @@ export default function ChatDashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const formatChatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    if (isToday(date)) {
+      return format(date, 'HH:mm');
+    }
+    if (isYesterday(date)) {
+      return 'Ayer';
+    }
+    return format(date, 'd MMM', { locale: es });
+  };
+
   const fetchChats = async () => {
     const { data } = await supabase
       .from('chats')
-      .select('*')
+      .select('*, messages(created_at)')
       .order('created_at', { ascending: false });
-    if (data) setChats(data);
+      
+    if (data) {
+      // Calculate last activity time for sorting
+      const chatsWithLastActivity = data.map(chat => {
+        const messageDates = chat.messages?.map((m: any) => new Date(m.created_at).getTime()) || [];
+        const chatCreatedDate = new Date(chat.created_at).getTime();
+        const lastActivity = messageDates.length > 0 ? Math.max(...messageDates) : chatCreatedDate;
+        return { ...chat, lastActivity };
+      });
+      
+      // Sort by last activity descending
+      chatsWithLastActivity.sort((a, b) => b.lastActivity - a.lastActivity);
+      setChats(chatsWithLastActivity);
+    }
   };
 
   const fetchMessages = async (chatId: string) => {
@@ -198,34 +259,84 @@ export default function ChatDashboard() {
       chat_id: activeChatId,
       sender: 'agent',
       message: inputText,
+      type: isInternalNote ? 'internal_note' : 'text',
       created_at: new Date().toISOString()
     };
     
     setMessages(prev => [...prev, tempMsg]);
     const currentInput = inputText;
+    const currentIsInternal = isInternalNote;
     setInputText("");
+    setShowCannedResponses(false);
+    
+    // Si era nota interna, podemos desactivarla después de enviarla para mayor seguridad
+    // setIsInternalNote(false); 
 
     await fetch('/api/send-message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: activeChatId, message: currentInput })
+      body: JSON.stringify({ 
+        chat_id: activeChatId, 
+        message: currentInput,
+        is_internal: currentIsInternal
+      })
     });
   };
 
+  const filteredChats = chats.filter(c => {
+    // Filter by type
+    if (chatFilter === 'bot' && !c.agent_active) return false;
+    if (chatFilter === 'human' && c.agent_active) return false;
+    
+    // Filter by search query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const userName = (c.user_name || '').toLowerCase();
+      const id = c.id.toLowerCase();
+      return userName.includes(q) || id.includes(q);
+    }
+    
+    return true;
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setInputText(text);
+    
+    if (text.startsWith('/')) {
+      setShowCannedResponses(true);
+    } else {
+      setShowCannedResponses(false);
+    }
+  };
+
+  const applyCannedResponse = (text: string) => {
+    setInputText(text);
+    setShowCannedResponses(false);
+  };
+
   return (
-    <div className="flex h-screen bg-[#0f1115] overflow-hidden text-gray-200 font-sans">
+    <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#0f1115] text-gray-200' : 'bg-[#F8F9FA] text-gray-800'}`}>
       
       {/* Sidebar - App Navigation */}
-      <div className="w-16 bg-[#181a20] border-r border-white/5 flex flex-col items-center py-5 gap-8 z-20 shadow-xl">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#E59EAF] to-[#D4899A] rounded-xl flex items-center justify-center text-white font-bold shadow-lg shrink-0 transition-transform hover:scale-105 cursor-pointer">
+      <div className={`w-16 flex flex-col items-center py-5 gap-8 z-20 shadow-sm transition-colors duration-300 ${isDarkMode ? 'bg-[#181a20] border-r border-white/5' : 'bg-white border-r border-gray-200'}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-sm shrink-0 transition-transform hover:scale-105 cursor-pointer ${isDarkMode ? 'bg-gradient-to-br from-[#E59EAF] to-[#D4899A]' : 'bg-[#E59EAF]'}`}>
           T
         </div>
         
         <div className="flex-1"></div>
 
         <button 
+          onClick={toggleTheme} 
+          className={`p-3 rounded-xl transition-all flex flex-col items-center gap-1 w-12 group ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-[#E59EAF] hover:bg-pink-50'}`}
+          title={isDarkMode ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
+        >
+          {isDarkMode ? <Sun size={20} className="group-hover:rotate-45 transition-transform" /> : <Moon size={20} className="group-hover:-rotate-12 transition-transform" />}
+        </button>
+
+        <button 
           onClick={handleLogout} 
-          className="text-gray-400 hover:text-white hover:bg-white/10 p-3 rounded-xl transition-all flex flex-col items-center gap-1 w-12 group"
+          className={`p-3 rounded-xl transition-all flex flex-col items-center gap-1 w-12 group ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-[#E59EAF] hover:bg-pink-50'}`}
           title="Cerrar Sesión"
         >
           <LogOut size={20} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -233,9 +344,9 @@ export default function ChatDashboard() {
       </div>
 
       {/* Chat List (CRM View) */}
-      <div className="w-80 bg-[#181a20] border-r border-white/5 flex flex-col z-10">
-        <div className="p-5 border-b border-white/5 bg-[#1e2128]">
-          <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
+      <div className={`w-80 flex flex-col z-10 shadow-sm transition-colors duration-300 ${isDarkMode ? 'bg-[#181a20] border-r border-white/5' : 'bg-white border-r border-gray-200'}`}>
+        <div className={`p-5 border-b transition-colors duration-300 ${isDarkMode ? 'bg-[#1e2128] border-white/5' : 'bg-[#FAFAFA] border-gray-100'}`}>
+          <h2 className={`text-lg font-bold flex items-center gap-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
             <MessageSquare size={18} className="text-[#E59EAF]" />
             Conversaciones
           </h2>
@@ -243,34 +354,76 @@ export default function ChatDashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
             <input 
               type="text" 
-              placeholder="Buscar chat..." 
-              className="w-full bg-[#0f1115] border border-white/10 text-white placeholder-gray-500 rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#E59EAF] transition-shadow"
+              placeholder="Buscar chat o ID..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#E59EAF]/50 focus:border-[#E59EAF] transition-all shadow-sm ${isDarkMode ? 'bg-[#0f1115] border border-white/10 text-white placeholder-gray-500' : 'bg-white border border-gray-200 text-gray-800 placeholder-gray-400'}`}
             />
+          </div>
+          
+          {/* Filters */}
+          <div className="flex gap-2 mt-4">
+            <button 
+              onClick={() => setChatFilter('all')}
+              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${chatFilter === 'all' ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-800') : (isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}`}
+            >
+              Todos
+            </button>
+            <button 
+              onClick={() => setChatFilter('human')}
+              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${chatFilter === 'human' ? (isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700') : (isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}`}
+            >
+              Humano
+            </button>
+            <button 
+              onClick={() => setChatFilter('bot')}
+              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${chatFilter === 'bot' ? (isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : (isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}`}
+            >
+              Bot Activo
+            </button>
           </div>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {chats.map(chat => {
+          {filteredChats.map(chat => {
             const chatTags = chat.tags || [];
             
+            // Extract last message text if available
+            let lastMessageText = "";
+            if (chat.messages && chat.messages.length > 0) {
+              const lastMsgObj = [...chat.messages].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+              lastMessageText = lastMsgObj.type === 'file' ? 'Adjunto 📎' : lastMsgObj.message || '';
+            }
+
             return (
               <div 
                 key={chat.id} 
                 onClick={() => setActiveChatId(chat.id)}
-                className={`p-4 border-b border-white/5 cursor-pointer transition-all hover:bg-white/5 relative overflow-hidden ${activeChatId === chat.id ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-[#E59EAF]' : ''}`}
+                className={`p-4 border-b cursor-pointer transition-all relative overflow-hidden ${
+                  isDarkMode 
+                    ? `border-white/5 hover:bg-white/5 ${activeChatId === chat.id ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-[#E59EAF]' : ''}`
+                    : `border-gray-100 hover:bg-gray-50 ${activeChatId === chat.id ? 'bg-[#FFF5F7] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-[#E59EAF]' : ''}`
+                }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <div className="font-medium text-gray-100 flex items-center gap-2 truncate">
+                  <div className={`font-semibold flex items-center gap-2 truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
                     {chat.user_name || 'Anónimo'}
                   </div>
-                  <div className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                    {format(new Date(chat.created_at), 'HH:mm')}
+                  <div className={`text-xs whitespace-nowrap ml-2 font-medium ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    {formatChatDate(chat.lastActivity ? new Date(chat.lastActivity).toISOString() : chat.created_at)}
                   </div>
                 </div>
                 
+                {/* Last message preview */}
+                {lastMessageText && (
+                  <div className={`text-[13px] truncate mt-0.5 mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {lastMessageText}
+                  </div>
+                )}
+                
                 <div className="flex justify-between items-end mt-2">
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-xs text-gray-500 font-mono">ID: {chat.id.split('-')[0]}</div>
+                    <div className="text-xs text-gray-400 font-mono">ID: {chat.id.split('-')[0]}</div>
                     {/* Tags Badges */}
                     {chatTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
@@ -278,7 +431,7 @@ export default function ChatDashboard() {
                           const tagInfo = AVAILABLE_TAGS.find(t => t.id === tagId);
                           if (!tagInfo) return null;
                           return (
-                            <span key={tagId} className={`text-[9px] px-1.5 py-0.5 rounded border ${tagInfo.color}`}>
+                            <span key={tagId} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${isDarkMode ? tagInfo.color : tagInfo.color.replace('bg-', 'bg-').replace('/20', '/10')}`}>
                               {tagInfo.label}
                             </span>
                           );
@@ -288,11 +441,11 @@ export default function ChatDashboard() {
                   </div>
                   
                   {chat.agent_active ? (
-                    <span className="flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium shrink-0">
+                    <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 shadow-sm ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
                       <Bot size={10} /> Bot
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[10px] bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded-full font-medium shrink-0">
+                    <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 shadow-sm ${isDarkMode ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-orange-50 text-orange-600 border border-orange-200'}`}>
                       <User size={10} /> Humano
                     </span>
                   )}
@@ -304,21 +457,21 @@ export default function ChatDashboard() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-[#0f1115] relative">
+      <div className={`flex-1 flex flex-col relative transition-colors duration-300 ${isDarkMode ? 'bg-[#0f1115]' : 'bg-white'}`}>
         {activeChatId ? (
           <>
             {/* Header */}
-            <div className="h-16 px-6 bg-[#181a20] border-b border-white/5 flex items-center justify-between shadow-sm z-10">
+            <div className={`h-16 px-6 border-b flex items-center justify-between shadow-sm z-10 transition-colors duration-300 ${isDarkMode ? 'bg-[#181a20] border-white/5' : 'bg-white border-gray-200'}`}>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-sm font-bold text-white shadow-inner">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${isDarkMode ? 'bg-gradient-to-tr from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-tr from-gray-100 to-gray-200 border border-gray-300 text-gray-600'}`}>
                   {activeChat?.user_name ? activeChat.user_name.charAt(0).toUpperCase() : 'A'}
                 </div>
                 <div>
-                  <div className="font-semibold text-sm text-gray-100 leading-none">
+                  <div className={`font-bold text-sm leading-none ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                     {activeChat?.user_name || 'Anónimo'}
                   </div>
-                  <div className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> En línea
+                  <div className={`text-xs mt-1.5 flex items-center gap-1.5 font-medium ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    <span className={`w-2 h-2 rounded-full ${isDarkMode ? 'bg-emerald-400' : 'bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]'}`}></span> En línea
                   </div>
                 </div>
               </div>
@@ -328,7 +481,7 @@ export default function ChatDashboard() {
                  <div className="relative">
                    <button 
                      onClick={() => setShowTagMenu(!showTagMenu)}
-                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5"
+                     className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors shadow-sm ${isDarkMode ? 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
                    >
                      <Tag size={14} /> Etiquetas <ChevronDown size={14} className={`transition-transform ${showTagMenu ? 'rotate-180' : ''}`} />
                    </button>
@@ -336,34 +489,34 @@ export default function ChatDashboard() {
                    {showTagMenu && (
                      <>
                        <div className="fixed inset-0 z-40" onClick={() => setShowTagMenu(false)}></div>
-                       <div className="absolute right-0 mt-2 w-48 bg-[#1e2128] border border-white/10 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2">
-                         <div className="px-3 pb-2 mb-2 border-b border-white/5 flex items-center justify-between">
-                           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Etiquetas</span>
+                       <div className={`absolute right-0 mt-2 w-56 border rounded-xl shadow-lg z-50 py-2 animate-in fade-in slide-in-from-top-2 ${isDarkMode ? 'bg-[#1e2128] border-white/10' : 'bg-white border-gray-200'}`}>
+                         <div className={`px-4 pb-3 mb-2 border-b flex items-center justify-between ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
+                           <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Etiquetas</span>
                            <button 
                              onClick={() => {
                                setShowTagMenu(false);
                                setIsManageTagsOpen(true);
                              }}
-                             className="text-gray-400 hover:text-white transition-colors"
+                             className={`transition-colors p-1.5 rounded-md ${isDarkMode ? 'text-gray-400 hover:text-white bg-white/5 hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-100'}`}
                              title="Administrar Etiquetas"
                            >
                              <Settings size={14} />
                            </button>
                          </div>
-                         <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                         <div className="max-h-64 overflow-y-auto custom-scrollbar">
                            {AVAILABLE_TAGS.map(tag => {
                              const isSelected = (activeChat?.tags || []).includes(tag.id);
                              return (
                                <button
                                  key={tag.id}
                                  onClick={() => toggleTag(tag.id)}
-                                 className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-white/5 transition-colors text-sm text-gray-200"
+                                 className={`w-full px-4 py-2 flex items-center justify-between transition-colors text-sm ${isDarkMode ? 'hover:bg-white/5 text-gray-200' : 'hover:bg-gray-50 text-gray-700'}`}
                                >
-                                 <div className="flex items-center gap-2">
-                                   <span className={`w-2 h-2 rounded-full ${tag.color.split(' ')[0]}`}></span>
-                                   {tag.label}
+                                 <div className="flex items-center gap-2.5">
+                                   <span className={`w-2.5 h-2.5 rounded-full ${tag.color.split(' ')[0]}`}></span>
+                                   <span className="font-medium">{tag.label}</span>
                                  </div>
-                                 {isSelected && <Check size={14} className="text-emerald-400" />}
+                                 {isSelected && <Check size={16} className="text-[#E59EAF]" />}
                                </button>
                              );
                            })}
@@ -373,11 +526,15 @@ export default function ChatDashboard() {
                    )}
                  </div>
 
-                 <div className="w-px h-6 bg-white/10 mx-1"></div>
+                 <div className={`w-px h-6 mx-1 ${isDarkMode ? 'bg-white/10' : 'bg-gray-200'}`}></div>
 
                  <button 
                   onClick={toggleAgent}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all border ${activeChat?.agent_active ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'}`}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all border shadow-sm ${
+                    activeChat?.agent_active 
+                      ? (isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100')
+                      : (isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100')
+                  }`}
                  >
                    {activeChat?.agent_active ? (
                      <><BotOff size={14} /> Desactivar Bot</>
@@ -389,20 +546,32 @@ export default function ChatDashboard() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+            <div className={`flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar transition-colors duration-300 ${isDarkMode ? '' : 'bg-[#F8F9FA]'}`}>
               {messages.map((msg, idx) => {
                 const isAgent = msg.sender === 'agent';
                 const isFile = msg.type === 'file' && msg.file_url;
+                const isInternal = msg.type === 'internal_note';
                 const isImage = isFile && msg.file_url.match(/\.(jpg|jpeg|png|gif|webp)/i);
                 const isAudio = isFile && msg.file_url.match(/\.(mp3|wav|ogg|m4a|weba)/i);
 
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} group`}>
-                    <div className={`max-w-[70%] px-4 py-3 rounded-2xl shadow-sm text-sm relative ${isAgent ? 'bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white rounded-tr-sm' : 'bg-[#1e2128] border border-white/5 text-gray-200 rounded-tl-sm'}`}>
+                    <div className={`max-w-[75%] px-5 py-3.5 rounded-2xl shadow-sm text-[15px] relative ${
+                      isInternal 
+                        ? (isDarkMode ? 'bg-amber-500/20 border border-amber-500/30 text-amber-100 rounded-br-sm' : 'bg-[#FFF9E6] border border-amber-200 text-amber-900 rounded-br-sm')
+                        : isAgent 
+                          ? (isDarkMode ? 'bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white rounded-tr-sm' : 'bg-[#E59EAF] text-white rounded-tr-sm') 
+                          : (isDarkMode ? 'bg-[#1e2128] border border-white/5 text-gray-200 rounded-tl-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm')
+                    }`}>
+                      {isInternal && (
+                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-2 opacity-80">
+                          <NotebookPen size={12} /> Nota Interna
+                        </div>
+                      )}
                       {msg.message && <div className={`${isFile ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>}
                       
                       {isImage && (
-                        <div className="rounded-xl overflow-hidden border border-white/10">
+                        <div className={`rounded-xl overflow-hidden border ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
                           <img 
                             src={msg.file_url} 
                             alt="Attachment" 
@@ -420,12 +589,16 @@ export default function ChatDashboard() {
                       )}
 
                       {isFile && !isImage && !isAudio && (
-                        <a href={msg.file_url} target="_blank" className="flex items-center gap-2 p-3 rounded-lg bg-black/20 hover:bg-black/30 transition-colors text-white/90 font-medium text-xs">
+                        <a href={msg.file_url} target="_blank" className={`flex items-center gap-2 p-3 rounded-lg transition-colors font-medium text-sm ${
+                          isAgent 
+                            ? (isDarkMode ? 'bg-black/20 hover:bg-black/30 text-white/90' : 'bg-black/10 hover:bg-black/20 text-white') 
+                            : (isDarkMode ? 'bg-black/20 hover:bg-black/30 text-white/90' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200')
+                        }`}>
                           <Paperclip size={16} /> Documento Adjunto
                         </a>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-500 mt-1.5 mx-1 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className={`text-[11px] mt-1.5 mx-1 font-semibold opacity-0 group-hover:opacity-100 transition-opacity ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                       {format(new Date(msg.created_at), 'HH:mm')}
                     </span>
                   </div>
@@ -435,8 +608,63 @@ export default function ChatDashboard() {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-[#181a20] border-t border-white/5 z-10">
-              <div className="flex items-end gap-2 bg-[#0f1115] border border-white/10 rounded-2xl p-1.5 focus-within:border-[#E59EAF]/50 focus-within:ring-1 focus-within:ring-[#E59EAF]/50 transition-all">
+            <div className={`p-5 border-t z-10 transition-colors duration-300 ${isDarkMode ? 'bg-[#181a20] border-white/5' : 'bg-white border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]'} relative`}>
+              
+              {/* Canned Responses Popover */}
+              {showCannedResponses && (
+                <div className={`absolute bottom-full mb-2 left-5 w-80 rounded-xl shadow-xl border overflow-hidden z-50 ${isDarkMode ? 'bg-[#1e2128] border-white/10' : 'bg-white border-gray-200'}`}>
+                  <div className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border-b ${isDarkMode ? 'text-gray-400 border-white/5' : 'text-gray-500 border-gray-100'}`}>
+                    Respuestas Rápidas
+                  </div>
+                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                    {CANNED_RESPONSES.filter(c => c.trigger.startsWith(inputText)).map(canned => (
+                      <button
+                        key={canned.trigger}
+                        onClick={() => applyCannedResponse(canned.text)}
+                        className={`w-full text-left px-4 py-2.5 transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
+                      >
+                        <div className={`font-mono text-xs mb-1 ${isDarkMode ? 'text-[#E59EAF]' : 'text-[#D4899A]'}`}>{canned.trigger}</div>
+                        <div className={`text-sm truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{canned.text}</div>
+                      </button>
+                    ))}
+                    {CANNED_RESPONSES.filter(c => c.trigger.startsWith(inputText)).length === 0 && (
+                      <div className={`px-4 py-3 text-sm text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        No hay respuestas que coincidan.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Mode Toggle (Message vs Internal Note) */}
+              <div className="flex gap-2 mb-3">
+                <button 
+                  onClick={() => setIsInternalNote(false)}
+                  className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-md transition-all ${
+                    !isInternalNote 
+                      ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-gray-800 text-white') 
+                      : (isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')
+                  }`}
+                >
+                  Mensaje
+                </button>
+                <button 
+                  onClick={() => setIsInternalNote(true)}
+                  className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-md transition-all ${
+                    isInternalNote 
+                      ? (isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700') 
+                      : (isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')
+                  }`}
+                >
+                  <NotebookPen size={12} /> Nota Interna
+                </button>
+              </div>
+
+              <div className={`flex items-end gap-2 border rounded-2xl p-1.5 transition-all shadow-sm ${
+                isInternalNote 
+                  ? (isDarkMode ? 'bg-amber-500/5 border-amber-500/20 focus-within:border-amber-500/50' : 'bg-[#FFFCF5] border-amber-200 focus-within:border-amber-400')
+                  : (isDarkMode ? 'bg-[#0f1115] border-white/10 focus-within:border-[#E59EAF]/50 focus-within:ring-1 focus-within:ring-[#E59EAF]/50' : 'bg-[#F8F9FA] border-gray-300 focus-within:border-[#E59EAF] focus-within:ring-2 focus-within:ring-[#E59EAF]/20')
+              }`}>
                 
                 <input 
                    type="file" 
@@ -476,7 +704,7 @@ export default function ChatDashboard() {
                 <button 
                   onClick={() => document.getElementById('admin-file-input')?.click()}
                   disabled={activeChat?.agent_active}
-                  className="p-3 text-gray-400 hover:text-[#E59EAF] hover:bg-[#E59EAF]/10 rounded-xl transition-colors disabled:opacity-30 mb-0.5"
+                  className={`p-3 rounded-xl transition-colors disabled:opacity-30 mb-0.5 ${isDarkMode ? 'text-gray-400 hover:text-[#E59EAF] hover:bg-[#E59EAF]/10' : 'text-gray-400 hover:text-[#E59EAF] hover:bg-pink-50'}`}
                   title="Adjuntar archivo"
                 >
                   <Paperclip size={20} />
@@ -491,36 +719,40 @@ export default function ChatDashboard() {
                       sendMessage();
                     }
                   }}
-                  placeholder={activeChat?.agent_active ? "El bot está gestionando este chat..." : "Escribe un mensaje..."}
+                  placeholder={activeChat?.agent_active ? "El bot está gestionando este chat..." : isInternalNote ? "Escribe una nota interna (el cliente no la verá)..." : "Escribe tu respuesta..."}
                   disabled={activeChat?.agent_active}
                   rows={1}
-                  className="flex-1 bg-transparent border-none text-gray-100 px-3 py-3 focus:outline-none focus:ring-0 text-sm disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-600 resize-none max-h-32 min-h-[44px]"
+                  className={`flex-1 bg-transparent border-none px-3 py-3 focus:outline-none focus:ring-0 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed resize-none max-h-32 min-h-[44px] font-medium ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-800 placeholder-gray-400'}`}
                   style={{ fieldSizing: 'content' } as any}
                 />
                 
                 <button 
                   onClick={sendMessage}
                   disabled={!inputText.trim() || activeChat?.agent_active}
-                  className="w-11 h-11 bg-gradient-to-br from-[#E59EAF] to-[#D4899A] text-white rounded-xl flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md mb-0.5"
+                  className={`w-11 h-11 text-white rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm mb-0.5 ${
+                    isInternalNote
+                      ? (isDarkMode ? 'bg-amber-600 hover:bg-amber-500' : 'bg-amber-500 hover:bg-amber-600')
+                      : (isDarkMode ? 'bg-gradient-to-br from-[#E59EAF] to-[#D4899A] hover:opacity-90' : 'bg-[#E59EAF] hover:bg-[#D4899A]')
+                  }`}
                 >
                   <Send size={18} className="ml-1" />
                 </button>
               </div>
               
               {activeChat?.agent_active && (
-                <div className="flex items-center justify-center gap-2 text-xs text-amber-500/80 mt-3 font-medium bg-amber-500/10 py-1.5 rounded-lg">
-                  <Info size={14} /> El bot está respondiendo automáticamente. Desactívalo para intervenir.
+                <div className={`flex items-center justify-center gap-2 text-[13px] mt-3 font-semibold py-2 rounded-lg shadow-sm ${isDarkMode ? 'text-amber-500/80 bg-amber-500/10' : 'text-amber-700 bg-amber-50 border border-amber-200'}`}>
+                  <Info size={16} className={isDarkMode ? 'text-amber-500' : 'text-amber-500'} /> El bot está respondiendo automáticamente. Desactívalo para intervenir.
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center flex-col text-gray-500">
-            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <MessageSquare size={32} className="text-gray-600" />
+          <div className={`flex-1 flex items-center justify-center flex-col transition-colors duration-300 ${isDarkMode ? '' : 'bg-[#F8F9FA]'}`}>
+            <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-sm border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-gray-100'}`}>
+              <MessageSquare size={40} className={isDarkMode ? 'text-gray-600' : 'text-gray-300'} />
             </div>
-            <p className="text-lg font-medium text-gray-400">Ningún chat seleccionado</p>
-            <p className="text-sm mt-2 opacity-60">Selecciona una conversación del panel lateral</p>
+            <p className={`text-xl font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Ningún chat seleccionado</p>
+            <p className={`text-[15px] mt-2 font-medium ${isDarkMode ? 'text-gray-500 opacity-60' : 'text-gray-400'}`}>Selecciona una conversación del panel lateral para comenzar</p>
           </div>
         )}
       </div>

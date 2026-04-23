@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { chat_id, message, file_url } = body;
+    const { chat_id, message, file_url, type, is_internal } = body;
 
     if (!chat_id || (!message && !file_url)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -27,7 +27,10 @@ export async function POST(request: Request) {
     }
 
     // Determine type automatically
-    const msgType = file_url ? 'file' : 'text';
+    let msgType = type || (file_url ? 'file' : 'text');
+    if (is_internal) {
+      msgType = 'internal_note';
+    }
 
     // Clean potential bad characters from AI response
     const cleanMessage = message ? message.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g, "") : message;

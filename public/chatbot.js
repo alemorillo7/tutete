@@ -284,10 +284,9 @@
   document.head.appendChild(styleTag);
 
   // Configuration
-  const config = window.CHATBOT_CONFIG || {
-    client_id: "default_client",
-    api_base_url: ""
-  };
+  const config = window.CHATBOT_CONFIG || {};
+  config.client_id = config.client_id || "TUTETE_MAIN";
+  config.api_base_url = config.api_base_url || "https://tutete.vercel.app";
 
   // Utils
   function generateUUID() {

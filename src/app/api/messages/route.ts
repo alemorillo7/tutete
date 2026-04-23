@@ -14,6 +14,7 @@ export async function GET(request: Request) {
       .from('messages')
       .select('*')
       .eq('chat_id', chat_id)
+      .neq('type', 'internal_note')
       .order('created_at', { ascending: true });
 
     const { data: chatData, error: chatError } = await supabaseAdmin
