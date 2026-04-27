@@ -551,9 +551,9 @@ export default function ChatDashboard() {
                 const isAgent = msg.sender === 'agent';
                 const isFile = msg.type === 'file' && msg.file_url;
                 const isInternal = msg.type === 'internal_note';
-                const cleanFileUrl = isFile ? String(msg.file_url).split('?')[0].split('#')[0] : '';
-                const isImage = isFile && cleanFileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                const isAudio = isFile && cleanFileUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/i);
+                const isProducts = msg.type === 'products';
+                const isImage = isFile && msg.file_url.match(/\.(jpg|jpeg|png|gif|webp)/i);
+                const isAudio = isFile && msg.file_url.match(/\.(mp3|wav|ogg|m4a|weba)/i);
 
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} group`}>
@@ -569,6 +569,30 @@ export default function ChatDashboard() {
                           <NotebookPen size={12} /> Nota Interna
                         </div>
                       )}
+                      
+                      {isProducts ? (
+                        <div className="grid grid-cols-1 gap-3 mt-1 min-w-[200px]">
+                          {(() => {
+                            try {
+                              const productList = JSON.parse(msg.message);
+                              return productList.map((prod: any, pIdx: number) => (
+                                <a key={pIdx} href={prod.url || '#'} target="_blank" className={`rounded-lg overflow-hidden flex flex-col border transition-colors ${isDarkMode ? 'bg-white/10 border-white/10 hover:bg-white/20' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                                  <img src={prod.image} alt={prod.name} className="w-full h-24 object-cover" />
+                                  <div className="p-2">
+                                    <div className={`font-bold text-xs truncate ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{prod.name}</div>
+                                    <div className={`text-[10px] ${isDarkMode ? 'text-white/70' : 'text-gray-500'}`}>{prod.price}</div>
+                                  </div>
+                                </a>
+                              ));
+                            } catch (e) {
+                              return <div className="italic opacity-50 text-xs">Error al cargar productos</div>;
+                            }
+                          })()}
+                        </div>
+                      ) : (
+                        msg.message && <div className={`${isFile ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>
+                      )}
+                      
                       {isImage && (
                         <div className={`rounded-xl overflow-hidden border ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
                           <img 
@@ -577,12 +601,6 @@ export default function ChatDashboard() {
                             className="max-w-full cursor-pointer hover:scale-105 transition-transform duration-300" 
                             onClick={() => window.open(msg.file_url, '_blank')}
                           />
-                        </div>
-                      )}
-
-                      {msg.message && (
-                        <div className={`${isImage ? 'mt-3' : isFile ? 'mb-3' : ''} leading-relaxed`}>
-                          {msg.message}
                         </div>
                       )}
 

@@ -239,6 +239,57 @@
       margin-top: 4px;
     }
 
+    .product-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .product-card {
+      background: white;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s;
+    }
+
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    }
+
+    .product-card img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+    }
+
+    .product-info {
+      padding: 8px;
+    }
+
+    .product-name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .product-price {
+      font-size: 12px;
+      color: var(--chat-primary);
+      font-weight: bold;
+    }
+
     #tutete-recording-status {
        display: none;
        flex: 1;
@@ -435,12 +486,32 @@
       const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
       let content = msg.message;
-      if (msg.type === 'file' && msg.file_url) {
+      
+      if (msg.type === 'products') {
+        try {
+          const productList = JSON.parse(msg.message);
+          let gridHtml = '<div class="product-grid">';
+          productList.forEach(prod => {
+            gridHtml += `
+              <a href="${prod.url || '#'}" target="_blank" class="product-card">
+                <img src="${prod.image || ''}" alt="${prod.name}">
+                <div class="product-info">
+                  <div class="product-name">${prod.name}</div>
+                  <div class="product-price">${prod.price || ''}</div>
+                </div>
+              </a>
+            `;
+          });
+          gridHtml += '</div>';
+          content = gridHtml;
+        } catch (e) {
+          console.error("Error parsing products JSON", e);
+        }
+      } else if (msg.type === 'file' && msg.file_url) {
         const url = msg.file_url.toLowerCase();
-        const cleanUrl = url.split('?')[0].split('#')[0];
-        if (cleanUrl.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
-           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px;">${msg.message}</div>` : ''}`;
-        } else if (cleanUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/)) {
+        if (url.match(/\.(jpg|jpeg|png|gif|webp)/)) {
+           content = `${msg.message ? `<div>${msg.message}</div>` : ''}<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />`;
+        } else if (url.match(/\.(mp3|wav|ogg|m4a|weba)/)) {
            content = `${msg.message ? `<div>${msg.message}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
         } else {
            content = `${msg.message} <br><a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a>`;

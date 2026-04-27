@@ -33,7 +33,12 @@ export async function POST(request: Request) {
     }
 
     // Clean potential bad characters from AI response
-    const cleanMessage = message ? message.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g, "") : message;
+    let cleanMessage = message;
+    if (typeof message === 'string') {
+      cleanMessage = message.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g, "");
+    } else if (typeof message === 'object') {
+      cleanMessage = JSON.stringify(message);
+    }
 
     // Insert the agent message into Supabase
     const { data: newMessage, error: msgError } = await supabaseAdmin
