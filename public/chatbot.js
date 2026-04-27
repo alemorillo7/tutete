@@ -510,11 +510,11 @@
       } else if (msg.type === 'file' && msg.file_url) {
         const url = msg.file_url.toLowerCase();
         if (url.match(/\.(jpg|jpeg|png|gif|webp)/)) {
-           content = `${msg.message ? `<div>${msg.message}</div>` : ''}<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />`;
+           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px">${msg.message}</div>` : ''}`;
         } else if (url.match(/\.(mp3|wav|ogg|m4a|weba)/)) {
            content = `${msg.message ? `<div>${msg.message}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
         } else {
-           content = `${msg.message} <br><a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a>`;
+           content = `<a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a> <br>${msg.message}`;
         }
       }
 

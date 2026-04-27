@@ -590,20 +590,21 @@ export default function ChatDashboard() {
                           })()}
                         </div>
                       ) : (
-                        msg.message && <div className={`${isFile ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>
+                        <>
+                          {isImage && (
+                            <div className={`rounded-xl overflow-hidden border mb-2 ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
+                              <img 
+                                src={msg.file_url} 
+                                alt="Attachment" 
+                                className="max-w-full cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                onClick={() => window.open(msg.file_url, '_blank')}
+                              />
+                            </div>
+                          )}
+                          {msg.message && <div className={`${isFile && !isImage ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>}
+                        </>
                       )}
                       
-                      {isImage && (
-                        <div className={`rounded-xl overflow-hidden border ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
-                          <img 
-                            src={msg.file_url} 
-                            alt="Attachment" 
-                            className="max-w-full cursor-pointer hover:scale-105 transition-transform duration-300" 
-                            onClick={() => window.open(msg.file_url, '_blank')}
-                          />
-                        </div>
-                      )}
-
                       {isAudio && (
                         <audio controls className="w-full h-10 mt-2 custom-audio">
                           <source src={msg.file_url} />
