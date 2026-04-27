@@ -551,8 +551,9 @@ export default function ChatDashboard() {
                 const isAgent = msg.sender === 'agent';
                 const isFile = msg.type === 'file' && msg.file_url;
                 const isInternal = msg.type === 'internal_note';
-                const isImage = isFile && msg.file_url.match(/\.(jpg|jpeg|png|gif|webp)/i);
-                const isAudio = isFile && msg.file_url.match(/\.(mp3|wav|ogg|m4a|weba)/i);
+                const cleanFileUrl = isFile ? String(msg.file_url).split('?')[0].split('#')[0] : '';
+                const isImage = isFile && cleanFileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                const isAudio = isFile && cleanFileUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/i);
 
                 return (
                   <div key={msg.id || idx} className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} group`}>
@@ -568,8 +569,6 @@ export default function ChatDashboard() {
                           <NotebookPen size={12} /> Nota Interna
                         </div>
                       )}
-                      {msg.message && <div className={`${isFile ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>}
-                      
                       {isImage && (
                         <div className={`rounded-xl overflow-hidden border ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
                           <img 
@@ -578,6 +577,12 @@ export default function ChatDashboard() {
                             className="max-w-full cursor-pointer hover:scale-105 transition-transform duration-300" 
                             onClick={() => window.open(msg.file_url, '_blank')}
                           />
+                        </div>
+                      )}
+
+                      {msg.message && (
+                        <div className={`${isImage ? 'mt-3' : isFile ? 'mb-3' : ''} leading-relaxed`}>
+                          {msg.message}
                         </div>
                       )}
 

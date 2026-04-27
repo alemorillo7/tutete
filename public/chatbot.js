@@ -249,6 +249,40 @@
     }
 
       
+    #tutete-chat-cta {
+      position: absolute;
+      bottom: 75px;
+      right: 0;
+      background: white;
+      padding: 10px 16px;
+      border-radius: 20px;
+      box-shadow: var(--chat-shadow);
+      font-size: 13px;
+      white-space: nowrap;
+      color: #333;
+      border: 1px solid #f0f0f0;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s, transform 0.5s;
+      pointer-events: none;
+    }
+    #tutete-chat-cta.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #tutete-chat-cta::after {
+      content: "";
+      position: absolute;
+      bottom: -6px;
+      right: 24px;
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-right: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f0f0f0;
+      transform: rotate(45deg);
+    }
+
     @media (max-width: 480px) {
       #tutete-chatbot-container {
         bottom: 0;
@@ -403,9 +437,10 @@
       let content = msg.message;
       if (msg.type === 'file' && msg.file_url) {
         const url = msg.file_url.toLowerCase();
-        if (url.match(/\.(jpg|jpeg|png|gif|webp)/)) {
-           content = `${msg.message ? `<div>${msg.message}</div>` : ''}<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />`;
-        } else if (url.match(/\.(mp3|wav|ogg|m4a|weba)/)) {
+        const cleanUrl = url.split('?')[0].split('#')[0];
+        if (cleanUrl.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px;">${msg.message}</div>` : ''}`;
+        } else if (cleanUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/)) {
            content = `${msg.message ? `<div>${msg.message}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
         } else {
            content = `${msg.message} <br><a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a>`;
@@ -673,5 +708,19 @@
 
   // Initial fetch to show history if returning user
   fetchMessages();
+
+  // Mostrar el globo de texto después de 4 segundos
+  setTimeout(() => {
+    if (!isOpen) {
+      const cta = document.createElement('div');
+      cta.id = 'tutete-chat-cta';
+      cta.innerText = '¡Hola! ¿Te ayudo con tu pedido? 🎀';
+      container.appendChild(cta);
+      setTimeout(() => cta.classList.add('show'), 100);
+      
+      // Se oculta automáticamente si abren el chat
+      toggleBtn.addEventListener('click', () => cta.remove(), { once: true });
+    }
+  }, 4000);
 
 })();
