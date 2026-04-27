@@ -592,11 +592,11 @@ export default function ChatDashboard() {
                       ) : (
                         <>
                           {isImage && (
-                            <div className={`rounded-xl overflow-hidden border mb-2 max-w-[300px] ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
+                            <div className={`rounded-xl overflow-hidden border mb-3 max-w-[300px] shadow-md ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
                               <img 
                                 src={msg.file_url} 
                                 alt="Attachment" 
-                                className="w-full h-auto cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                className="w-full h-auto cursor-pointer hover:scale-105 transition-transform duration-500" 
                                 onClick={() => window.open(msg.file_url, '_blank')}
                               />
                             </div>

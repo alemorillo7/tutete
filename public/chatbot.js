@@ -514,7 +514,7 @@
       } else if (msg.type === 'file' && msg.file_url) {
         const url = msg.file_url.toLowerCase();
         if (url.match(/\.(jpg|jpeg|png|gif|webp)/)) {
-           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px">${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>` : ''}`;
+           content = `<img src="${msg.file_url}" class="msg-img" style="box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 12px;" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:12px; line-height: 1.5;">${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>` : ''}`;
         } else if (url.match(/\.(mp3|wav|ogg|m4a|weba)/)) {
            content = `${msg.message ? `<div>${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
         } else {
