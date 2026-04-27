@@ -592,11 +592,11 @@ export default function ChatDashboard() {
                       ) : (
                         <>
                           {isImage && (
-                            <div className={`rounded-xl overflow-hidden border mb-2 ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
+                            <div className={`rounded-xl overflow-hidden border mb-2 max-w-[300px] ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
                               <img 
                                 src={msg.file_url} 
                                 alt="Attachment" 
-                                className="max-w-full cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                className="w-full h-auto cursor-pointer hover:scale-105 transition-transform duration-300" 
                                 onClick={() => window.open(msg.file_url, '_blank')}
                               />
                             </div>
@@ -606,7 +606,7 @@ export default function ChatDashboard() {
                               className={`${isFile && !isImage ? 'mb-3' : ''} leading-relaxed`}
                               dangerouslySetInnerHTML={{ 
                                 __html: msg.message
-                                  .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                                  .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
                                   .replace(/\n/g, '<br>') 
                               }}
                             />
