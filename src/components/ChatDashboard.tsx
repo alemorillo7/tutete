@@ -601,7 +601,16 @@ export default function ChatDashboard() {
                               />
                             </div>
                           )}
-                          {msg.message && <div className={`${isFile && !isImage ? 'mb-3' : ''} leading-relaxed`}>{msg.message}</div>}
+                          {msg.message && (
+                            <div 
+                              className={`${isFile && !isImage ? 'mb-3' : ''} leading-relaxed`}
+                              dangerouslySetInnerHTML={{ 
+                                __html: msg.message
+                                  .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                                  .replace(/\n/g, '<br>') 
+                              }}
+                            />
+                          )}
                         </>
                       )}
                       

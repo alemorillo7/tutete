@@ -485,7 +485,11 @@
       msgDiv.className = `msg ${msg.sender}`;
       const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
-      let content = msg.message;
+      let content = msg.message || '';
+      
+      // Basic Markdown Bold Support
+      content = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      content = content.replace(/\n/g, '<br>');
       
       if (msg.type === 'products') {
         try {
@@ -510,11 +514,11 @@
       } else if (msg.type === 'file' && msg.file_url) {
         const url = msg.file_url.toLowerCase();
         if (url.match(/\.(jpg|jpeg|png|gif|webp)/)) {
-           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px">${msg.message}</div>` : ''}`;
+           content = `<img src="${msg.file_url}" class="msg-img" onclick="window.open('${msg.file_url}')" />${msg.message ? `<div style="margin-top:8px">${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>` : ''}`;
         } else if (url.match(/\.(mp3|wav|ogg|m4a|weba)/)) {
-           content = `${msg.message ? `<div>${msg.message}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
+           content = `${msg.message ? `<div>${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>` : ''}<audio controls class="msg-audio"><source src="${msg.file_url}" type="audio/webm"></audio>`;
         } else {
-           content = `<a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a> <br>${msg.message}`;
+           content = `<a href="${msg.file_url}" target="_blank" style="color:inherit;text-decoration:underline;">Ver archivo</a> <br>${msg.message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}`;
         }
       }
 
